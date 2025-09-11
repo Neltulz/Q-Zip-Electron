@@ -38,21 +38,17 @@ function createWindow() {
   app.setAppUserModelId('com.qzipelectron.app');
   // Resolve preload, always basing on current preload.mjs to avoid stale CJS copies
   const preloadDir = __dirname
+  // In production, vite-plugin-electron builds preload as preload.cjs (see vite.config)
+  // In dev, we still generate a CJS copy from preload.mjs if needed
+  const preloadCjs = path.join(preloadDir, 'preload.cjs')
   const preloadMjs = path.join(preloadDir, 'preload.mjs')
-  let preloadPath = preloadMjs
+  let preloadPath = preloadCjs
   try {
-    if (fs.existsSync(preloadMjs)) {
+    if (!fs.existsSync(preloadCjs) && fs.existsSync(preloadMjs)) {
       const content = fs.readFileSync(preloadMjs, 'utf-8')
-      if (/\brequire\(/.test(content) || /module\.exports/.test(content)) {
-        const cjsPath = path.join(preloadDir, 'preload.cjs')
-        // Overwrite every run to ensure latest API (e.g., createTempCopies)
-        fs.writeFileSync(cjsPath, content, 'utf-8')
-        preloadPath = cjsPath
-      }
-    } else {
-      // Fallback to preload.js if preload.mjs is missing
-      const jsPath = path.join(preloadDir, 'preload.js')
-      if (fs.existsSync(jsPath)) preloadPath = jsPath
+      const cjsPath = preloadCjs
+      fs.writeFileSync(cjsPath, content, 'utf-8')
+      preloadPath = cjsPath
     }
   } catch { }
 
