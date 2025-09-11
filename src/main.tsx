@@ -9,7 +9,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-// IPC message handler (Phase 1-4 consolidated setup)
-window.ipcRenderer.on('main-process-message', (_event, message) => {
-  console.log('📨 Main process message:', message)
-})
+// Diagnostics to verify preload API availability
+try {
+  // eslint-disable-next-line no-console
+  console.log('[renderer] window.api available:', !!(window as any).api);
+} catch { }

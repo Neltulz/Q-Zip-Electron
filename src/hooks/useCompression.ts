@@ -15,9 +15,15 @@ export function useCompression() {
 
   // Listen for progress updates
   useEffect(() => {
-    if (!window.api) return;
+    // Wait for window.api to be available
+    if (!window.api) {
+      console.warn('useCompression: window.api not available, progress updates disabled');
+      return;
+    }
 
+    console.log('useCompression: Setting up progress listener');
     const unsubscribe = window.api.onProgress((data: CompressionProgress) => {
+      console.log('useCompression: Progress update:', data);
       setProgress(data);
     });
 

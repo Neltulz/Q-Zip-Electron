@@ -158,4 +158,29 @@ export function setup7ZipHandlers(): void {
 
     return result.canceled ? [] : result.filePaths;
   });
+
+  // No need for resolveDroppedFilePaths: with sandbox disabled, renderer gets File.path directly
+
+  // Create temp copies from dropped blobs to obtain usable file paths
+  ipcMain.handle('temp:createCopies', async (_event, parts: Array<{ name: string; data: ArrayBuffer; relativePath?: string }>): Promise<string[]> => {
+    const fs = require('fs');
+    const os = require('os');
+    const pathLocal = require('path');
+
+    const tmpDir = fs.mkdtempSync(pathLocal.join(os.tmpdir(), 'qzip-drop-'));
+    const filePaths: string[] = [];
+    for (const part of parts) {
+      const safeName = String(part.name || 'file');
+      const rel = part.relativePath && typeof part.relativePath === 'string' && part.relativePath.trim().length > 0
+        ? part.relativePath
+        : safeName;
+      const target = pathLocal.join(tmpDir, rel);
+      const targetDir = pathLocal.dirname(target);
+      fs.mkdirSync(targetDir, { recursive: true });
+      const buf = Buffer.from(part.data);
+      fs.writeFileSync(target, buf);
+      filePaths.push(target);
+    }
+    return filePaths;
+  });
 }

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Diagnostics to confirm preload is loaded and bridge is set up
+try {
+  // eslint-disable-next-line no-console
+  console.log('[preload] loaded. contextIsolation active, exposing api...');
+} catch { }
+
 export interface CompressJob {
   inputs: string[];
   out: string;
@@ -16,9 +22,11 @@ export interface ProgressData {
   message: string;
 }
 
+type TempFilePart = { name: string; data: ArrayBuffer; relativePath?: string };
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('api', {
+const api = {
   compress: (job: CompressJob): Promise<CompressResult> =>
     ipcRenderer.invoke('compress', job),
 
@@ -33,4 +41,15 @@ contextBridge.exposeInMainWorld('api', {
 
   selectOutputPath: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:selectOutput'),
-});
+
+  // Write dropped file blobs to a temp folder; returns file paths
+  createTempCopies: (parts: TempFilePart[]): Promise<string[]> =>
+    ipcRenderer.invoke('temp:createCopies', parts),
+};
+
+try {
+  // eslint-disable-next-line no-console
+  console.log('[preload] exposing api keys:', Object.keys(api));
+} catch { }
+
+contextBridge.exposeInMainWorld('api', api);

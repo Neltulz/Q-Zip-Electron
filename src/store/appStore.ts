@@ -16,7 +16,7 @@ export interface AppState {
   outputPath: string | null;
 
   // Actions
-  addFiles: (files: File[]) => void;
+  addFiles: (filePaths: string[]) => void;
   removeFile: (id: string) => void;
   clearFiles: () => void;
   setProcessing: (processing: boolean) => void;
@@ -30,37 +30,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   outputPath: null,
 
-  addFiles: (fileList: File[] | string[]) => {
+  addFiles: (filePaths: string[]) => {
     const currentFiles = get().files;
-    console.log('appStore: addFiles called with:', fileList);
+    console.log('appStore: addFiles called with file paths:', filePaths);
 
-    const newFiles: FileItem[] = fileList.map((fileOrPath, index) => {
-      if (typeof fileOrPath === 'string') {
-        // Handle file paths from Electron dialog
-        console.log('appStore: Processing string path:', fileOrPath);
-        const fileName = fileOrPath.split(/[/\\]/).pop() || 'unknown';
-        return {
-          id: `${Date.now()}-${index}`,
-          name: fileName,
-          path: fileOrPath,
-          size: 0, // Size not available from path alone
-          type: 'application/octet-stream',
-          lastModified: Date.now(),
-        };
-      } else {
-        // Handle File objects from web API (with fallback)
-        const file = fileOrPath;
-        const resolvedPath = (file as any).path || file.webkitRelativePath || file.name;
-        console.log('appStore: Processing File object:', file.name, 'resolved path:', resolvedPath);
-        return {
-          id: `${Date.now()}-${index}`,
-          name: file.name,
-          path: resolvedPath,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          lastModified: file.lastModified,
-        };
-      }
+    const newFiles: FileItem[] = filePaths.map((filePath, index) => {
+      console.log('appStore: Processing file path:', filePath);
+      const fileName = filePath.split(/[/\\]/).pop() || 'unknown';
+      return {
+        id: `${Date.now()}-${index}`,
+        name: fileName,
+        path: filePath,
+        size: 0, // Size not available from path alone
+        type: 'application/octet-stream',
+        lastModified: Date.now(),
+      };
     });
 
     // Avoid duplicates based on path
