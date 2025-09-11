@@ -1,16 +1,19 @@
 import { useAppStore } from './store/appStore';
+import { useCompression } from './hooks/useCompression';
 import { FileDropZone } from './components/FileDropZone';
 import { FileList } from './components/FileList';
+import { CompressionControls } from './components/CompressionControls';
+import { ProgressBar } from './components/ProgressBar';
 import './App.css'
 
 export function App() {
   const {
     files,
-    isProcessing,
     error,
-    clearFiles,
     removeFile,
   } = useAppStore();
+
+  const { progress, isCompressing } = useCompression();
 
   return (
     <div className="app">
@@ -20,18 +23,22 @@ export function App() {
           <span className="badge typescript">TypeScript</span>
           <span className="badge react">React</span>
           <span className="badge zustand">Zustand</span>
+          <span className="badge sevenzip">7-Zip</span>
         </div>
       </header>
 
       <main className="app-main">
         <div className="phase-indicator">
-          <h2>Phase 5: State Management & Drag & Drop</h2>
+          <h2>Phase 6: 7-Zip Integration</h2>
           <div className="phase-features">
-            <span className="feature-tag">✅ Zustand Store</span>
-            <span className="feature-tag">✅ File Drop Zone</span>
-            <span className="feature-tag">✅ File Management</span>
+            <span className="feature-tag">✅ IPC Communication</span>
+            <span className="feature-tag">✅ 7-Zip Binary</span>
+            <span className="feature-tag">✅ Progress Tracking</span>
+            <span className="feature-tag">✅ File Compression</span>
           </div>
         </div>
+
+        <ProgressBar progress={progress} isVisible={isCompressing} />
 
         <div className="drop-zone-section">
           <FileDropZone>
@@ -51,23 +58,7 @@ export function App() {
         {files.length > 0 && (
           <div className="file-list-section">
             <FileList files={files} onRemoveFile={removeFile} />
-            <div className="file-actions">
-              <button
-                type="button"
-                className="action-button secondary"
-                onClick={clearFiles}
-                disabled={isProcessing}
-              >
-                Clear All Files
-              </button>
-              <button
-                type="button"
-                className="action-button primary"
-                disabled={files.length === 0 || isProcessing}
-              >
-                {isProcessing ? 'Processing...' : 'Compress Files'}
-              </button>
-            </div>
+            <CompressionControls />
           </div>
         )}
 
@@ -78,15 +69,15 @@ export function App() {
         )}
 
         <div className="info-section">
-          <h3>Phase 5 Features:</h3>
+          <h3>Phase 6 Features:</h3>
           <ul>
-            <li>Zustand state management for files and app state</li>
-            <li>React Dropzone for drag & drop file handling</li>
-            <li>File list with size display and removal</li>
-            <li>Duplicate file prevention</li>
-            <li>Processing state management</li>
+            <li>7-Zip binary integration for file compression</li>
+            <li>IPC communication between main and renderer processes</li>
+            <li>Real-time compression progress tracking</li>
+            <li>Output path selection dialog</li>
+            <li>Secure context isolation with preload script</li>
           </ul>
-          <p><strong>Next:</strong> Add 7-Zip integration for actual compression</p>
+          <p><strong>Next:</strong> Add advanced features (virtual lists, dialogs, etc.)</p>
         </div>
       </main>
     </div>

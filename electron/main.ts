@@ -1,6 +1,8 @@
 import { app, BrowserWindow } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { setup7ZipHandlers } from '../src/sevenZip'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -23,20 +25,30 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
+// Handle squirrel startup for Windows installer
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const squirrelStartup = require('electron-squirrel-startup');
+if (squirrelStartup) {
+  app.quit();
+}
+
 function createWindow() {
+  app.setAppUserModelId('com.qzipelectron.app');
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     width: 1920,
     height: 1080,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
     },
   })
 
-  // Test active push message to Renderer-process.
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', (new Date).toLocaleString())
-  })
+  // Set up 7-Zip IPC handlers
+  setup7ZipHandlers();
 
   // Open DevTools in development mode (Phase 2 feature)
   if (process.env.NODE_ENV === 'development') {

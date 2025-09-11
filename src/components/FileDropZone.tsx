@@ -10,8 +10,28 @@ interface FileDropZoneProps {
 export function FileDropZone({ className = '', children }: FileDropZoneProps) {
   const { addFiles, isProcessing } = useAppStore();
 
+  const handleSelectFiles = async () => {
+    console.log('FileDropZone: Browse button clicked, window.api exists:', !!window.api);
+    if (!window.api || isProcessing) {
+      console.error('FileDropZone: window.api is not available or processing');
+      return;
+    }
+
+    try {
+      const filePaths = await window.api.selectFiles();
+      console.log('FileDropZone: Selected file paths:', filePaths);
+      if (filePaths.length > 0) {
+        addFiles(filePaths);
+      }
+    } catch (error) {
+      console.error('Failed to select files:', error);
+    }
+  };
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
+      console.log('FileDropZone: Files dropped via drag & drop:', acceptedFiles.map(f => f.name));
+      console.log('FileDropZone: First file path property:', (acceptedFiles[0] as any)?.path);
       if (!isProcessing && acceptedFiles.length > 0) {
         addFiles(acceptedFiles);
       }
@@ -49,9 +69,22 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
             ) : isDragActive ? (
               <span>Drop files here...</span>
             ) : (
-              <span>
-                Drag & drop files here, or <button type="button" className="link-button">browse</button>
-              </span>
+              <div>
+                <span>
+                  Drag & drop files here, or{' '}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectFiles();
+                    }}
+                    disabled={isProcessing}
+                  >
+                    browse files
+                  </button>
+                </span>
+              </div>
             )}
           </div>
           {isDragReject && (

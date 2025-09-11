@@ -30,16 +30,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   outputPath: null,
 
-  addFiles: (fileList: File[]) => {
+  addFiles: (fileList: File[] | string[]) => {
     const currentFiles = get().files;
-    const newFiles: FileItem[] = fileList.map((file, index) => ({
-      id: `${Date.now()}-${index}`,
-      name: file.name,
-      path: (file as any).path || file.webkitRelativePath || file.name,
-      size: file.size,
-      type: file.type || 'application/octet-stream',
-      lastModified: file.lastModified,
-    }));
+    console.log('appStore: addFiles called with:', fileList);
+
+    const newFiles: FileItem[] = fileList.map((fileOrPath, index) => {
+      if (typeof fileOrPath === 'string') {
+        // Handle file paths from Electron dialog
+        console.log('appStore: Processing string path:', fileOrPath);
+        const fileName = fileOrPath.split(/[/\\]/).pop() || 'unknown';
+        return {
+          id: `${Date.now()}-${index}`,
+          name: fileName,
+          path: fileOrPath,
+          size: 0, // Size not available from path alone
+          type: 'application/octet-stream',
+          lastModified: Date.now(),
+        };
+      } else {
+        // Handle File objects from web API (with fallback)
+        const file = fileOrPath;
+        const resolvedPath = (file as any).path || file.webkitRelativePath || file.name;
+        console.log('appStore: Processing File object:', file.name, 'resolved path:', resolvedPath);
+        return {
+          id: `${Date.now()}-${index}`,
+          name: file.name,
+          path: resolvedPath,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          lastModified: file.lastModified,
+        };
+      }
+    });
 
     // Avoid duplicates based on path
     const existingPaths = new Set(currentFiles.map(f => f.path));
