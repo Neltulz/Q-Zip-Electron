@@ -9,7 +9,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-// Use contextBridge
+// IPC message handler (Phase 1-4 consolidated setup)
 window.ipcRenderer.on('main-process-message', (_event, message) => {
-  console.log(message)
+  console.log('📨 Main process message:', message)
 })

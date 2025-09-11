@@ -72,3 +72,7 @@ playwright-report
 app/dist
 app/dist-electron
 .electron
+
+# Project documentation
+Phase_*.md
+PHASES_README.md
