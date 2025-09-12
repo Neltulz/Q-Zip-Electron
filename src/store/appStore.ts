@@ -4,6 +4,7 @@ export interface FileItem {
   id: string;
   name: string;
   path: string;
+  isDirectory?: boolean;
   size: number;
   type: string;
   lastModified: number;
@@ -34,25 +35,41 @@ export const useAppStore = create<AppState>((set, get) => ({
     const currentFiles = get().files;
     console.log('appStore: addFiles called with file paths:', filePaths);
 
-    const newFiles: FileItem[] = filePaths.map((filePath, index) => {
+    // Deduplicate against existing and within this batch
+    const seenPaths = new Set(currentFiles.map(f => f.path));
+    const dedupedPaths: string[] = [];
+    for (const p of filePaths) {
+      if (!seenPaths.has(p)) {
+        seenPaths.add(p);
+        dedupedPaths.push(p);
+      } else {
+        console.log('appStore: Skipping duplicate path:', p);
+      }
+    }
+
+    const now = Date.now();
+    const newFiles: FileItem[] = dedupedPaths.map((filePath, index) => {
       console.log('appStore: Processing file path:', filePath);
       const fileName = filePath.split(/[/\\]/).pop() || 'unknown';
       return {
-        id: `${Date.now()}-${index}`,
+        id: `${now}-${index}`,
         name: fileName,
         path: filePath,
+        isDirectory: !/\.[^\\/.]+$/.test(fileName),
         size: 0, // Size not available from path alone
         type: 'application/octet-stream',
-        lastModified: Date.now(),
+        lastModified: now,
       };
     });
 
-    // Avoid duplicates based on path
-    const existingPaths = new Set(currentFiles.map(f => f.path));
-    const uniqueNewFiles = newFiles.filter(f => !existingPaths.has(f.path));
+    if (newFiles.length === 0) {
+      console.log('appStore: No new files to add after dedup');
+      set(state => ({ ...state, error: null }));
+      return;
+    }
 
     set(state => ({
-      files: [...state.files, ...uniqueNewFiles],
+      files: [...state.files, ...newFiles],
       error: null,
     }));
   },

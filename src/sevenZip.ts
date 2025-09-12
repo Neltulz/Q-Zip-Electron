@@ -55,6 +55,29 @@ export interface CompressResult {
 }
 
 export function setup7ZipHandlers(): void {
+  // One staging root per session; we copy blobs/files here so we can
+  // pass relative paths to 7-Zip and keep archive entries rooted cleanly
+  let sessionRoot: string | null = null;
+  const ensureSessionRoot = (): string => {
+    const fs = require('fs');
+    const os = require('os');
+    const pathLocal = require('path');
+    if (sessionRoot && typeof sessionRoot === 'string' && fs.existsSync(sessionRoot)) return sessionRoot as string;
+    sessionRoot = fs.mkdtempSync(pathLocal.join(os.tmpdir(), 'qzip-staging-'));
+    return sessionRoot as string;
+  };
+  const cleanupSessionRoot = () => {
+    try {
+      if (!sessionRoot) return;
+      const fs = require('fs');
+      if (fs.existsSync(sessionRoot)) {
+        fs.rmSync(sessionRoot, { recursive: true, force: true });
+      }
+      sessionRoot = null;
+    } catch (e) {
+      console.warn('cleanupSessionRoot: unexpected error', e);
+    }
+  };
   ipcMain.handle('compress', async (_event, job: CompressJob): Promise<CompressResult> => {
     console.log('sevenZip: Compression job received:', job);
     try {
@@ -66,13 +89,31 @@ export function setup7ZipHandlers(): void {
       }
 
       const level = Number.isFinite(job.level) ? Math.max(0, Math.min(9, Number(job.level))) : 5;
-      const args = ['a', job.out, ...job.inputs, `-mx=${level}`, '-bsp1', '-bso1'];
+      // If inputs are inside our sessionRoot, use relative paths and set cwd to sessionRoot
+      const pathLocal = require('path');
+      const root = ensureSessionRoot();
+      const relInputs: string[] = [];
+      let allUnderRoot = true;
+      for (const p of job.inputs) {
+        const rel = pathLocal.relative(root, p);
+        if (rel.startsWith('..') || pathLocal.isAbsolute(rel)) {
+          allUnderRoot = false;
+          break;
+        }
+        relInputs.push(rel);
+      }
+
+      const useRel = allUnderRoot && relInputs.length === job.inputs.length && relInputs.length > 0;
+      const args = useRel
+        ? ['a', job.out, ...relInputs, `-mx=${level}`, '-bsp1', '-bso1']
+        : ['a', job.out, ...job.inputs, `-mx=${level}`, '-bsp1', '-bso1'];
 
       console.log('Starting 7-Zip compression:', { path7za, args });
 
       const child = spawn(path7za, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
+        cwd: useRel ? root : undefined,
       });
 
       return new Promise<CompressResult>((resolve, reject) => {
@@ -105,6 +146,10 @@ export function setup7ZipHandlers(): void {
           reject(new Error(`Failed to start 7-Zip: ${err.message}`));
         });
 
+        const cleanupTemp = () => {
+          cleanupSessionRoot();
+        };
+
         child.on('close', (code) => {
           console.log('7-Zip process closed with code:', code);
 
@@ -116,10 +161,12 @@ export function setup7ZipHandlers(): void {
                 message: 'Compression completed successfully!',
               });
             });
+            cleanupTemp();
             resolve({ ok: true });
           } else {
             const errorMsg = stderr || `7-Zip failed with exit code ${code}`;
             console.error('7-Zip error:', errorMsg);
+            cleanupTemp();
             reject(new Error(errorMsg));
           }
         });
@@ -164,16 +211,20 @@ export function setup7ZipHandlers(): void {
   // Create temp copies from dropped blobs to obtain usable file paths
   ipcMain.handle('temp:createCopies', async (_event, parts: Array<{ name: string; data: ArrayBuffer; relativePath?: string }>): Promise<string[]> => {
     const fs = require('fs');
-    const os = require('os');
     const pathLocal = require('path');
 
-    const tmpDir = fs.mkdtempSync(pathLocal.join(os.tmpdir(), 'qzip-drop-'));
+    const tmpDir = ensureSessionRoot();
     const filePaths: string[] = [];
+    const topLevelSet: Set<string> = new Set();
     for (const part of parts) {
       const safeName = String(part.name || 'file');
       const rel = part.relativePath && typeof part.relativePath === 'string' && part.relativePath.trim().length > 0
         ? part.relativePath
         : safeName;
+      // Track top-level entry name for folder summarization
+      const seg = rel.split(/[\\\/]+/).filter(Boolean)[0] || safeName;
+      const topPath = pathLocal.join(tmpDir, seg);
+      topLevelSet.add(topPath);
       const target = pathLocal.join(tmpDir, rel);
       const targetDir = pathLocal.dirname(target);
       fs.mkdirSync(targetDir, { recursive: true });
@@ -181,6 +232,7 @@ export function setup7ZipHandlers(): void {
       fs.writeFileSync(target, buf);
       filePaths.push(target);
     }
-    return filePaths;
+    // Return only top-level entries (folders or single files) so UI shows folder(s), not every file
+    return Array.from(topLevelSet);
   });
 }

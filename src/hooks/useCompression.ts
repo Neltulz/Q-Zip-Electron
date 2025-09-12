@@ -77,7 +77,10 @@ export function useCompression() {
     setStoreError(null);
 
     try {
-      const filePaths = files.map(f => f.path);
+      // Deduplicate before sending to 7-Zip to avoid duplicate filename collisions
+      // Only pass top-level entries (files or directories) to 7-Zip
+      const filePathSet = new Set(files.map(f => f.path));
+      const filePaths = Array.from(filePathSet);
       console.log('useCompression: File paths to compress:', filePaths);
       console.log('useCompression: Output path:', finalOutputPath);
 
