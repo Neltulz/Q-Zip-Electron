@@ -11,7 +11,7 @@ declare global {
       onProgress: (callback: (data: { percent: number; message: string }) => void) => () => void;
       selectOutputPath: () => Promise<string | null>;
       selectFiles: () => Promise<string[]>;
-      createTempCopies: (parts: Array<{ name: string; data: ArrayBuffer; relativePath?: string }>) => Promise<string[]>;
+      createTempCopies: (parts: Array<{ name: string; relativePath: string; kind: 'file' | 'dir'; data?: ArrayBuffer }>) => Promise<string[]>;
     };
   }
 }

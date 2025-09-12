@@ -104,9 +104,10 @@ export function setup7ZipHandlers(): void {
       }
 
       const useRel = allUnderRoot && relInputs.length === job.inputs.length && relInputs.length > 0;
+      // Include empty directories explicitly with -r for recursion
       const args = useRel
-        ? ['a', job.out, ...relInputs, `-mx=${level}`, '-bsp1', '-bso1']
-        : ['a', job.out, ...job.inputs, `-mx=${level}`, '-bsp1', '-bso1'];
+        ? ['a', '-r', job.out, ...relInputs, `-mx=${level}`, '-bsp1', '-bso1']
+        : ['a', '-r', job.out, ...job.inputs, `-mx=${level}`, '-bsp1', '-bso1'];
 
       console.log('Starting 7-Zip compression:', { path7za, args });
 
@@ -209,7 +210,7 @@ export function setup7ZipHandlers(): void {
   // No need for resolveDroppedFilePaths: with sandbox disabled, renderer gets File.path directly
 
   // Create temp copies from dropped blobs to obtain usable file paths
-  ipcMain.handle('temp:createCopies', async (_event, parts: Array<{ name: string; data: ArrayBuffer; relativePath?: string }>): Promise<string[]> => {
+  ipcMain.handle('temp:createCopies', async (_event, parts: Array<{ name: string; relativePath: string; kind: 'file' | 'dir'; data?: ArrayBuffer }>): Promise<string[]> => {
     const fs = require('fs');
     const pathLocal = require('path');
 
@@ -217,7 +218,7 @@ export function setup7ZipHandlers(): void {
     const filePaths: string[] = [];
     const topLevelSet: Set<string> = new Set();
     for (const part of parts) {
-      const safeName = String(part.name || 'file');
+      const safeName = String(part.name || 'entry');
       const rel = part.relativePath && typeof part.relativePath === 'string' && part.relativePath.trim().length > 0
         ? part.relativePath
         : safeName;
@@ -228,8 +229,13 @@ export function setup7ZipHandlers(): void {
       const target = pathLocal.join(tmpDir, rel);
       const targetDir = pathLocal.dirname(target);
       fs.mkdirSync(targetDir, { recursive: true });
-      const buf = Buffer.from(part.data);
-      fs.writeFileSync(target, buf);
+      if (part.kind === 'dir') {
+        // Ensure directory exists; leave it empty
+        fs.mkdirSync(target, { recursive: true });
+      } else {
+        const buf = Buffer.from(part.data as ArrayBuffer);
+        fs.writeFileSync(target, buf);
+      }
       filePaths.push(target);
     }
     // Return only top-level entries (folders or single files) so UI shows folder(s), not every file

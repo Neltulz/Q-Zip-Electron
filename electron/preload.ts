@@ -22,7 +22,7 @@ export interface ProgressData {
   message: string;
 }
 
-type TempFilePart = { name: string; data: ArrayBuffer; relativePath?: string };
+type TempFilePart = { name: string; relativePath: string; kind: 'file' | 'dir'; data?: ArrayBuffer };
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object

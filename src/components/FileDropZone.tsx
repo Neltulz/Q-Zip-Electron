@@ -11,6 +11,7 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
   const { addFiles, isProcessing } = useAppStore();
   // Keep a side-channel for computed relative paths from directory traversal
   const relativePathMapRef = useRef<WeakMap<File, string>>(new WeakMap());
+  const lastEmptyDirsRef = useRef<string[]>([]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[], _fileRejections?: unknown, event?: unknown) => {
@@ -29,7 +30,7 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
       }
 
       let droppedPaths: string[] = [];
-      const isFolderDrop = acceptedFiles.some(f => {
+      const isFolderDrop = (lastEmptyDirsRef.current.length > 0) || acceptedFiles.some(f => {
         const mapRel = relativePathMapRef.current.get(f as File);
         if (typeof mapRel === 'string' && mapRel.includes('/')) return true;
         const rp = (f as any).webkitRelativePath as string | undefined;
@@ -129,20 +130,30 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
       (async () => {
         try {
           console.log('[Drop] fallback: creating temp copies from blobs');
-          const parts = await Promise.all(
-            acceptedFiles.map(async (f: File & { webkitRelativePath?: string }) => ({
-              // Prefer relative path captured during traversal; fallback to native; else filename
-              relativePath: (relativePathMapRef.current.get(f as File)) || (f.webkitRelativePath && f.webkitRelativePath.trim().length > 0 ? f.webkitRelativePath : f.name),
-              // Top-level folder name (first segment) if we have a relative path; else filename
-              name: (() => {
-                const rel = relativePathMapRef.current.get(f as File) || f.webkitRelativePath;
-                if (rel && rel.includes('/')) return rel.split('/')[0];
-                return f.name;
-              })(),
-              data: await f.arrayBuffer(),
-            }))
+          const emptyDirs = lastEmptyDirsRef.current;
+          const partsFiles = await Promise.all(
+            acceptedFiles.map(async (f: File & { webkitRelativePath?: string }) => {
+              const rel = (relativePathMapRef.current.get(f as File)) || (f.webkitRelativePath && f.webkitRelativePath.trim().length > 0 ? f.webkitRelativePath : f.name);
+              const top = rel && rel.includes('/') ? rel.split('/')[0] : rel;
+              return {
+                kind: 'file' as const,
+                name: top,
+                relativePath: rel,
+                data: await f.arrayBuffer(),
+              };
+            })
           );
-          const tempPaths = await window.api.createTempCopies(parts);
+          const partsDirs = (emptyDirs || []).map((rel) => {
+            const top = rel && rel.includes('/') ? rel.split('/')[0] : rel;
+            return {
+              kind: 'dir' as const,
+              name: top,
+              relativePath: rel,
+            };
+          });
+          const parts = [...partsFiles, ...partsDirs];
+          const tempPaths = await window.api.createTempCopies(parts as any);
+          lastEmptyDirsRef.current = [];
           finalize(tempPaths);
         } catch (err) {
           console.error('[Drop] temp copy fallback failed:', err);
@@ -169,6 +180,7 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
     }
 
     const files: File[] = [];
+    const emptyDirs: string[] = [];
 
     const readEntry = async (entry: any, parentPath: string): Promise<void> => {
       if (!entry) return;
@@ -185,13 +197,20 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
         });
       } else if (entry.isDirectory) {
         const dirReader = entry.createReader();
+        // If directory has no entries, record it as an empty dir
+        let sawChild = false;
         await new Promise<void>((resolve) => {
           const readBatch = () => {
             dirReader.readEntries(async (batch: any[]) => {
               if (!batch || batch.length === 0) {
+                if (!sawChild) {
+                  const relDir = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+                  emptyDirs.push(relDir);
+                }
                 resolve();
                 return;
               }
+              sawChild = true;
               for (const child of batch) {
                 await readEntry(child, parentPath ? `${parentPath}/${entry.name}` : entry.name);
               }
@@ -207,6 +226,7 @@ export function FileDropZone({ className = '', children }: FileDropZoneProps) {
       for (const entry of entries) {
         await readEntry(entry, '');
       }
+      lastEmptyDirsRef.current = emptyDirs;
       return files;
     }
 

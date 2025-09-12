@@ -78,7 +78,7 @@ function setup7ZipHandlers() {
         relInputs.push(rel);
       }
       const useRel = allUnderRoot && relInputs.length === job.inputs.length && relInputs.length > 0;
-      const args = useRel ? ["a", job.out, ...relInputs, `-mx=${level}`, "-bsp1", "-bso1"] : ["a", job.out, ...job.inputs, `-mx=${level}`, "-bsp1", "-bso1"];
+      const args = useRel ? ["a", "-r", job.out, ...relInputs, `-mx=${level}`, "-bsp1", "-bso1"] : ["a", "-r", job.out, ...job.inputs, `-mx=${level}`, "-bsp1", "-bso1"];
       console.log("Starting 7-Zip compression:", { path7za, args });
       const child = spawn(path7za, args, {
         stdio: ["pipe", "pipe", "pipe"],
@@ -167,7 +167,7 @@ function setup7ZipHandlers() {
     const tmpDir = ensureSessionRoot();
     const topLevelSet = /* @__PURE__ */ new Set();
     for (const part of parts) {
-      const safeName = String(part.name || "file");
+      const safeName = String(part.name || "entry");
       const rel = part.relativePath && typeof part.relativePath === "string" && part.relativePath.trim().length > 0 ? part.relativePath : safeName;
       const seg = rel.split(/[\\\/]+/).filter(Boolean)[0] || safeName;
       const topPath = pathLocal.join(tmpDir, seg);
@@ -175,8 +175,12 @@ function setup7ZipHandlers() {
       const target = pathLocal.join(tmpDir, rel);
       const targetDir = pathLocal.dirname(target);
       fs2.mkdirSync(targetDir, { recursive: true });
-      const buf = Buffer.from(part.data);
-      fs2.writeFileSync(target, buf);
+      if (part.kind === "dir") {
+        fs2.mkdirSync(target, { recursive: true });
+      } else {
+        const buf = Buffer.from(part.data);
+        fs2.writeFileSync(target, buf);
+      }
     }
     return Array.from(topLevelSet);
   });
